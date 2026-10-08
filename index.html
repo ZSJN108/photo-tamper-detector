@@ -1,0 +1,1406 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#f5f7fa">
+<title>照片检测工具 · 篡改痕迹分析</title>
+<style>
+  :root {
+    --bg: #f2f5f7;
+    --card: #ffffff;
+    --ink: #17253b;
+    --ink-soft: #5c6b80;
+    --line: #dfe5ea;
+    --primary: #0e7490;
+    --primary-dark: #155e75;
+    --primary-soft: #eef6f8;
+    --warn: #92610c;
+    --warn-bg: #fdf6e7;
+    --danger: #b3421f;
+    --danger-bg: #fbeae4;
+    --ok: #2a7a4f;
+    --ok-bg: #e9f4ed;
+    --serif: "Songti SC", "Noto Serif SC", "STSong", SimSun, serif;
+    --radius: 14px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", sans-serif;
+    background: var(--bg); color: var(--ink);
+    line-height: 1.65; min-height: 100vh;
+    padding: 20px 14px calc(28px + env(safe-area-inset-bottom));
+  }
+  .wrap { max-width: 860px; margin: 0 auto; }
+
+  /* 报告抬头 */
+  .masthead { text-align: center; padding: 10px 0 16px; }
+  .masthead h1 {
+    font-family: var(--serif); font-size: 27px; font-weight: 700; letter-spacing: 2px;
+  }
+  .masthead .subtitle { color: var(--ink-soft); font-size: 13px; margin-top: 4px; letter-spacing: .5px; }
+  .rule-double {
+    border: none; border-top: 3px double rgba(23,37,59,.35);
+    margin: 0 8%;
+  }
+
+  .card {
+    background: var(--card); border-radius: var(--radius);
+    border: 1px solid var(--line); padding: 18px; margin-top: 16px;
+  }
+
+  /* 免责声明 */
+  .disclaimer {
+    margin-top: 14px; padding: 9px 14px; border-radius: 8px;
+    background: var(--warn-bg); color: var(--warn);
+    font-size: 12.5px; line-height: 1.6;
+    border: 1px solid #ecd9ae;
+  }
+  .disclaimer b { font-weight: 600; }
+
+  /* 结果区免责提示框 */
+  .disclaimer-box {
+    display: none; margin-top: 16px; padding: 14px 16px; border-radius: 10px;
+    background: #fffbf3; border: 1.5px solid #e8a33d;
+  }
+  .disclaimer-box.show { display: block; animation: rise .35s ease-out both; }
+  .disclaimer-box .db-head {
+    font-family: var(--serif); font-size: 15.5px; font-weight: 700; color: #92610c; margin-bottom: 6px;
+  }
+  .disclaimer-box .db-body {
+    font-size: 13.5px; line-height: 1.75; color: #7a5518;
+  }
+  .disclaimer-box .db-actions { margin-top: 10px; text-align: right; }
+  .disclaimer-box .db-btn {
+    border: 1px solid #d99a2b; background: transparent; color: #92610c; font-size: 13px; font-weight: 600;
+    padding: 7px 22px; border-radius: 8px; cursor: pointer; font-family: inherit;
+    transition: background .15s, color .15s;
+  }
+  .disclaimer-box .db-btn:hover, .disclaimer-box .db-btn:active { background: #d99a2b; color: #fff; }
+
+  /* 评分区 */
+  .score-row { display: flex; gap: 12px; margin-bottom: 14px; }
+  .score-card {
+    flex: 1; border-radius: 10px; padding: 12px 14px 10px; text-align: center;
+    background: #f8fafb; border: 1px solid var(--line);
+  }
+  .score-card .score-label { font-size: 12px; color: var(--ink-soft); font-weight: 600; letter-spacing: 1px; }
+  .score-card .score-num { font-family: var(--serif); font-size: 34px; font-weight: 700; line-height: 1.3; }
+  .score-card .score-full { font-size: 13px; font-weight: 600; color: var(--ink-soft); font-family: -apple-system, sans-serif; }
+  .score-card .score-grade { font-size: 12.5px; font-weight: 600; }
+  .score-card.g-green .score-num, .score-card.g-green .score-grade { color: var(--ok); }
+  .score-card.g-yellow .score-num, .score-card.g-yellow .score-grade { color: var(--warn); }
+  .score-card.g-red .score-num, .score-card.g-red .score-grade { color: var(--danger); }
+  .score-card.g-red { border-color: #e7bfae; background: var(--danger-bg); }
+  .score-detail { font-size: 13px; line-height: 1.7; }
+  .score-detail .sd-title {
+    font-weight: 700; color: var(--ink); margin-top: 8px;
+  }
+  .score-detail .sd-item { display: flex; gap: 6px; color: #4b5563; padding: 2px 0; }
+  .score-detail .sd-delta { font-weight: 700; color: var(--danger); flex-shrink: 0; font-family: var(--serif); }
+  .score-detail .sd-none { color: var(--ok); font-weight: 600; }
+  .score-note { font-size: 11.5px; color: #97a2af; margin: 8px 0 2px; }
+
+  /* 标注开关行 */
+  #annoRow label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+  #annoRow input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--primary); }
+
+  /* 上传区：送检托盘 */
+  .dropzone {
+    position: relative; margin-top: 16px; border: 1.5px dashed #9fc3cd; border-radius: var(--radius);
+    background: var(--card); padding: 40px 16px 34px; text-align: center;
+    cursor: pointer; transition: border-color .15s, background .15s; user-select: none;
+  }
+  .dropzone:hover, .dropzone.dragover { border-color: var(--primary); background: var(--primary-soft); }
+  .dropzone .dz-icon { font-size: 32px; }
+  .dropzone .dz-main { font-size: 15.5px; font-weight: 600; margin-top: 8px; color: var(--ink); }
+  .dropzone .dz-sub { font-size: 12.5px; color: var(--ink-soft); margin-top: 4px; }
+  .dropzone .dz-seal {
+    position: absolute; top: 14px; right: 16px;
+    font-family: var(--serif); font-size: 12px; font-weight: 700; color: #b3421f;
+    border: 1.5px solid rgba(179,66,31,.55); border-radius: 4px;
+    padding: 2px 8px; transform: rotate(-6deg); letter-spacing: 3px; opacity: .75;
+  }
+  #fileInput { display: none; }
+
+  .browser-tip {
+    display: none; margin-top: 10px; font-size: 12.5px; color: var(--warn);
+    text-align: center;
+  }
+  .browser-tip.show { display: block; }
+
+  /* 状态与进度 */
+  .status-bar { display: none; margin-top: 16px; padding: 12px 16px; border-radius: 10px;
+    background: var(--primary-soft); color: var(--primary-dark); font-size: 14px; font-weight: 500; }
+  .status-bar.show { display: block; }
+  .status-bar .spinner {
+    display: inline-block; width: 14px; height: 14px; vertical-align: -2px;
+    border: 2px solid #c9e2e9; border-top-color: var(--primary); border-radius: 50%;
+    animation: spin .8s linear infinite; margin-right: 8px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .error-box { display: none; margin-top: 16px; padding: 12px 16px; border-radius: 10px;
+    background: var(--danger-bg); color: var(--danger); font-size: 13.5px; line-height: 1.6; }
+  .error-box.show { display: block; }
+
+  /* 来源判定卡 */
+  .source-card { display: none; align-items: flex-start; gap: 10px; margin-top: 16px;
+    padding: 12px 15px; border-radius: 10px; font-size: 13.5px; line-height: 1.55; }
+  .source-card.show { display: flex; animation: rise .35s ease-out both; }
+  .source-card .sc-icon { font-size: 20px; line-height: 1.4; }
+  .source-card .sc-title { font-weight: 700; }
+  .source-card.level-ok    { background: var(--ok-bg); color: var(--ok); }
+  .source-card.level-warn  { background: var(--warn-bg); color: var(--warn); }
+  .source-card.level-bad   { background: var(--danger-bg); color: var(--danger); }
+  .source-card.level-info  { background: #e9edf1; color: #3d4c61; }
+
+  /* 视图区 */
+  .viewer { display: none; margin-top: 16px; }
+  .viewer.show { display: block; animation: rise .35s ease-out both; }
+  .tabs {
+    display: flex; gap: 4px; background: rgba(255,255,255,.72); padding: 4px; border-radius: 12px;
+    border: 1px solid rgba(23,37,59,.09);
+    -webkit-backdrop-filter: saturate(1.4) blur(10px); backdrop-filter: saturate(1.4) blur(10px);
+  }
+  .tab {
+    flex: 1; text-align: center; padding: 8px 2px; font-size: 13.5px; font-weight: 600;
+    color: var(--ink-soft); border-radius: 9px; cursor: pointer; user-select: none;
+    transition: background .15s, color .15s; white-space: nowrap;
+  }
+  .tab:focus-visible, .btn:focus-visible, .db-btn:focus-visible {
+    outline: 2px solid var(--primary); outline-offset: 2px;
+  }
+  .tab.active { background: var(--card); color: var(--primary-dark); box-shadow: 0 1px 3px rgba(23,37,59,.14); }
+  @media (max-width: 480px) { .tab { font-size: 12px; padding: 8px 0; } }
+
+  .canvas-box {
+    margin-top: 12px; background: var(--card); border-radius: 12px; padding: 8px;
+    border: 1px solid var(--line);
+  }
+  canvas#viewCanvas { display: block; width: 100%; height: auto; border-radius: 8px; }
+  canvas#viewCanvas.hide { display: none; }
+
+  .param-row { display: none; margin-top: 12px; padding: 10px 14px; background: var(--card);
+    border-radius: 10px; border: 1px solid var(--line); font-size: 13px; }
+  .param-row.show { display: block; }
+  .param-row label { font-weight: 600; margin-right: 8px; color: var(--ink); }
+  .param-row input[type=range] {
+    width: 55%; vertical-align: middle; accent-color: var(--primary);
+  }
+  .param-row .pv { color: var(--primary-dark); font-weight: 700; min-width: 26px; display: inline-block; }
+  .seg { display: inline-flex; background: #e9edf1; border-radius: 9px; padding: 3px; gap: 2px; }
+  .seg button {
+    border: none; background: transparent; padding: 5px 12px; font-size: 12.5px;
+    border-radius: 7px; cursor: pointer; color: var(--ink-soft); font-weight: 600;
+    font-family: inherit;
+  }
+  .seg button.active { background: #fff; color: var(--primary-dark); box-shadow: 0 1px 2px rgba(23,37,59,.12); }
+
+  /* 说明卡 */
+  details.howto {
+    margin-top: 12px; background: var(--primary-soft); border-radius: 10px;
+    border: 1px solid #d3e7ec; overflow: hidden;
+  }
+  details.howto summary {
+    padding: 10px 14px; font-size: 13.5px; font-weight: 600; color: var(--primary-dark);
+    cursor: pointer; list-style: none; user-select: none;
+  }
+  details.howto summary::-webkit-details-marker { display: none; }
+  details.howto summary::before { content: "▸ "; }
+  details.howto[open] summary::before { content: "▾ "; }
+  details.howto .howto-body { padding: 0 14px 12px; font-size: 13px; color: #3d5561; line-height: 1.75; }
+
+  /* 结论卡 */
+  .verdict { display: none; }
+  .verdict.show { display: block; }
+  .verdict h2 {
+    font-family: var(--serif); font-size: 17px; margin-bottom: 12px; letter-spacing: 1px;
+  }
+  .clue-list { list-style: none; }
+  .clue-list li {
+    display: flex; gap: 9px; padding: 9px 0; font-size: 13.5px; line-height: 1.6;
+    border-bottom: 1px dashed var(--line); align-items: flex-start;
+  }
+  .clue-list li:last-child { border-bottom: none; }
+  .clue-list .cl-badge {
+    flex-shrink: 0; font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 4px;
+    margin-top: 2px; white-space: nowrap; border: 1px solid transparent;
+  }
+  .badge-strong { background: var(--danger-bg); color: var(--danger); border-color: #e7bfae; }
+  .badge-mid    { background: var(--warn-bg); color: var(--warn); border-color: #ecd9ae; }
+  .badge-info   { background: #e9edf1; color: #4b5a70; }
+  .badge-clean  { background: var(--ok-bg); color: var(--ok); border-color: #c4e0cf; }
+
+  /* 元数据表 */
+  .meta-panel { display: none; }
+  .meta-panel.show { display: block; }
+  .meta-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 4px; }
+  .meta-table td { padding: 7px 8px; border-bottom: 1px solid var(--line); word-break: break-all; }
+  .meta-table td:first-child { color: var(--ink-soft); width: 38%; white-space: nowrap; }
+  .meta-table td:last-child { font-weight: 500; }
+  .meta-flag { color: var(--danger); font-weight: 700; }
+  .meta-empty { font-size: 13.5px; color: var(--ink-soft); padding: 8px 0; }
+
+  .actions { display: flex; gap: 10px; margin-top: 16px; }
+  .btn {
+    flex: 1; border: 1px solid transparent; border-radius: 9px; padding: 13px 16px; font-size: 15px;
+    font-weight: 600; cursor: pointer; font-family: inherit; transition: filter .15s, background .15s;
+  }
+  .btn-primary { background: var(--primary); color: #fff; }
+  .btn-primary:hover { background: var(--primary-dark); }
+  .btn-plain { background: var(--card); color: var(--ink); border-color: var(--line); }
+  .btn-plain:hover { background: #eef1f4; }
+  .btn:active { filter: brightness(.94); }
+
+  .footer-note { margin-top: 20px; font-size: 11.5px; color: #97a2af; line-height: 1.7; text-align: center; }
+
+  @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) {
+    .viewer.show, .source-card.show, .disclaimer-box.show { animation: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="masthead">
+    <h1>照片检测工具</h1>
+    <div class="subtitle">检测照片的 P 图痕迹</div>
+  </div>
+  <hr class="rule-double">
+  <div class="browser-tip" id="browserTip">微信内可能无法选择文件，建议点右上角「…」选「在浏览器打开」。</div>
+
+  <div class="dropzone" id="dropzone">
+    <div class="dz-seal">待检</div>
+    <div class="dz-icon">📷</div>
+    <div class="dz-main">点击选择照片，或拖入、粘贴截图</div>
+    <div class="dz-sub">JPG / PNG / HEIC · 照片不离开本机</div>
+  </div>
+  <input type="file" id="fileInput" accept="image/*">
+
+  <div class="status-bar" id="statusBar"><span class="spinner"></span><span id="statusText">准备中…</span></div>
+  <div class="error-box" id="errorBox"></div>
+
+  <div class="source-card" id="sourceCard">
+    <div class="sc-icon" id="scIcon">ℹ️</div>
+    <div><span class="sc-title" id="scTitle"></span><span id="scBody"></span></div>
+  </div>
+
+  <div class="disclaimer-box" id="disclaimerBox">
+    <div class="db-head">使用前请先读这段</div>
+    <div class="db-body">
+      检测结果<b>只是线索</b>，不能证明照片被 P 过，也不能证明没被 P 过；低分同样不代表干净。
+      经微信压缩的图误报较多。涉及纠纷等重要判断，请交给专业鉴定机构。
+    </div>
+    <div class="db-actions"><button class="db-btn" id="ackBtn">我已知晓</button></div>
+  </div>
+
+  <div class="viewer" id="viewer">
+    <div class="tabs" id="tabs">
+      <div class="tab" data-view="original">原图</div>
+      <div class="tab" data-view="ela">ELA</div>
+      <div class="tab" data-view="heat">热力图</div>
+      <div class="tab" data-view="noise">噪声</div>
+      <div class="tab" data-view="meta">元数据</div>
+    </div>
+
+    <div class="canvas-box">
+      <canvas id="viewCanvas" class="hide"></canvas>
+      <div class="meta-panel" id="metaPanel"></div>
+    </div>
+
+    <div class="param-row" id="annoRow">
+      <label><input type="checkbox" id="annoToggle" checked> 问题标注</label>
+      <span style="color:var(--ink-soft); font-size:12px;">定位精度 ±16 像素</span>
+    </div>
+
+    <div class="param-row" id="elaParam">
+      <label>放大增益</label>
+      <input type="range" id="elaGain" min="4" max="40" step="2" value="16">
+      <span class="pv" id="elaGainVal">16</span><span style="color:var(--ink-soft)">（看不清就调大）</span>
+    </div>
+
+    <div class="param-row" id="heatParam">
+      <label>模式</label>
+      <span class="seg" id="heatSeg">
+        <button data-mode="compress" class="active">压缩差异</button>
+        <button data-mode="noise">噪声能量</button>
+      </span>
+    </div>
+
+    <details class="howto" id="howto">
+      <summary>这张图怎么看？</summary>
+      <div class="howto-body" id="howtoBody"></div>
+    </details>
+  </div>
+
+  <div class="card verdict" id="verdictCard">
+    <h2>检测线索汇总</h2>
+    <div class="score-row">
+      <div class="score-card" id="scoreCardSus">
+        <div class="score-label">可疑度总分</div>
+        <div class="score-num"><span id="susScore">--</span><span class="score-full">/100</span></div>
+        <div class="score-grade" id="susGrade">--</div>
+      </div>
+      <div class="score-card" id="scoreCardRel">
+        <div class="score-label">可靠度评分</div>
+        <div class="score-num"><span id="relScore">--</span><span class="score-full">/100</span></div>
+        <div class="score-grade" id="relGrade">--</div>
+      </div>
+    </div>
+    <div class="score-detail" id="scoreDetail"></div>
+    <div class="score-note">分数是规则参考，不是概率，不能作为证据。</div>
+    <ul class="clue-list" id="clueList"></ul>
+  </div>
+
+  <div class="actions" id="actionRow" style="display:none">
+    <button class="btn btn-primary" id="reanalyzeBtn">重新分析这张</button>
+    <button class="btn btn-plain" id="resetBtn">换一张照片</button>
+  </div>
+
+  <div class="footer-note">
+    本地分析，不上传 · 对「同图内复制挪动」不敏感 · 截图类图片重点看热力图与噪声
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ============================================================
+ * 照片检测工具 v1.0 —— 单文件纯前端实现
+ * 模块：M1 接入解码 / M2 EXIF / M3 预处理 / M4 ELA / M5 热力图
+ *       M6 噪声 / M7 DQT / M8 来源判定 / M9 线索汇总 / M10 UI / M11 文案
+ * ============================================================ */
+
+/* ---------------- M11 文案字典 ---------------- */
+const COPY = {
+  disclaimer: "",
+  howto: {
+    original: "先看清楚这是不是你想要检测的那张图。检测都是在这张图的基础上做的——如果原图在这里方向不对或显示异常，后面的结果都不可信。",
+    ela: "这张图的原理：把照片按固定参数重新压缩一遍，再和原图逐像素对比。<b>没被动过的地方误差一致，显示为均匀的灰底彩点</b>；被 P 过的区域（贴上去的物体、涂抹过的背景）压缩方式和周围不一样，会<b>发亮、偏色</b>。<br><br>⚠️ 注意：文字、人脸轮廓、高对比度边缘天生就会偏亮，这是正常的。只有<b>一大片连续发亮的区域</b>才值得怀疑。看不清就把上方增益调大。",
+    heat: "颜色越偏红，表示该区域的「压缩痕迹」和全图越不一致。<br><br>🔍 <b>平坦区域（天空、草地、墙面）里突然出现一小片红/黄色块</b>最值得怀疑。注意：窗户、树叶、花纹等高细节内容天生就会偏红——本工具会在下方线索里列出集中区域的位置，请对照原图判断那里是不是正常的高纹理内容。",
+    noise: "每张照片都有肉眼看不见的细微噪点纹理（来自相机传感器和图像处理）。<br><br>这张图把噪点放大给你看：<b>如果某个区域的颗粒感和周围明显不一样</b>——更粗、更细、或者异常平滑——那块地方可能是后来贴上去或抹掉的。",
+    meta: "这是照片的「出厂信息」。<br><br>📱 写着相机/手机型号和拍摄时间 → 大概率是原图；<br>🗂️ 什么都没有 → 图被转存或压缩过，信息丢了；<br>🚨 写着 Photoshop、美图秀秀等软件名 → <b>强线索</b>。"
+  },
+  heicError: "这是 iPhone 原始格式（HEIC），当前浏览器打不开。两个办法：① 在 iPhone 上用 Safari 打开本工具重新选图；② 先把照片转成 JPG 再试。",
+  decodeError: "这张图片无法解码，可能是格式特殊或文件损坏。试试截图后再上传。",
+  tooLargeError: "图片太大，当前浏览器无法处理。可以先用相册/截图功能把图缩小后再试。",
+  recompressError: "浏览器处理失败（重压缩阶段）。请换一张图片或换一个浏览器再试。"
+};
+
+/* 编辑软件关键词（小写匹配 latin1 串） */
+const EDITOR_KEYWORDS_STRONG = ["photoshop", "gimp", "lightroom", "meitu", "snapseed", "picsart", "pixlr", "canva", "inpaint", "topaz", "luminar"];
+const EDITOR_KEYWORDS_CN = ["美图", "醒图", "美颜", "修图"];   /* 以 UTF-8 字节出现在 latin1 串中 */
+const EDITOR_KEYWORDS_WEAK = ["adobe"];
+
+/* IJG 标准量化基表（JPEG 标准 Annex K） */
+const STD_LUMA = [
+  16,11,10,16,24,40,51,61, 12,12,14,19,26,58,60,55,
+  14,13,16,24,40,57,69,56, 14,17,22,29,51,87,80,62,
+  18,22,37,56,68,109,103,77, 24,35,55,64,81,104,113,92,
+  49,64,78,87,103,121,120,101, 72,92,95,98,112,100,103,99];
+const STD_CHROMA = [
+  17,18,24,47,99,99,99,99, 18,21,26,66,99,99,99,99,
+  24,26,56,99,99,99,99,99, 47,66,99,99,99,99,99,99,
+  99,99,99,99,99,99,99,99, 99,99,99,99,99,99,99,99,
+  99,99,99,99,99,99,99,99, 99,99,99,99,99,99,99,99];
+
+/* ---------------- 全局状态 ---------------- */
+const S = {
+  file: null, format: "", fileSize: 0,
+  exif: null, dqt: null, keywordHits: [],
+  width: 0, height: 0, scaled: false,
+  srcData: null, jpegData: null,   /* 两个 ImageData */
+  grayL: null, hp: null,           /* Float32Array */
+  heatGrid: null, noiseGrid: null, gridW: 0, gridH: 0,
+  clues: [], view: "original", heatMode: "compress",
+  annoBoxes: [], annoOn: true, sourceLevel: "info",
+  blobUrl: null
+};
+const MAX_EDGE = 3000, MAX_AREA = 12000000, BLOCK = 16, ELA_QUALITY = 0.90;
+
+/* ---------------- 小工具 ---------------- */
+const $ = id => document.getElementById(id);
+const tick = (ms=30) => new Promise(r => setTimeout(r, ms));
+const clamp = (v, lo, hi) => v < lo ? lo : (v > hi ? hi : v);
+
+function setStatus(text) { $("statusBar").classList.add("show"); $("statusText").textContent = text; }
+function hideStatus() { $("statusBar").classList.remove("show"); }
+function showError(msg) { const b = $("errorBox"); b.textContent = "⚠️ " + msg; b.classList.add("show"); hideStatus(); }
+function clearError() { $("errorBox").classList.remove("show"); }
+
+/* ---------------- M1 文件接入 ---------------- */
+function sniffFormat(u8) {
+  if (u8.length < 12) return "unknown";
+  if (u8[0] === 0xFF && u8[1] === 0xD8 && u8[2] === 0xFF) return "jpeg";
+  if (u8[0] === 0x89 && u8[1] === 0x50 && u8[2] === 0x4E && u8[3] === 0x47) return "png";
+  if (u8[0] === 0x52 && u8[1] === 0x49 && u8[2] === 0x46 && u8[3] === 0x46 &&
+      u8[8] === 0x57 && u8[9] === 0x45 && u8[10] === 0x42 && u8[11] === 0x50) return "webp";
+  if (u8[4] === 0x66 && u8[5] === 0x74 && u8[6] === 0x79 && u8[7] === 0x70) {
+    const brand = String.fromCharCode(u8[8], u8[9], u8[10], u8[11]);
+    if (["heic","heix","hevc","hevx","mif1","msf1","heim","heis","hevm","hevs"].includes(brand)) return "heic";
+  }
+  if (u8[0] === 0x47 && u8[1] === 0x49 && u8[2] === 0x46) return "gif";
+  return "unknown";
+}
+
+/* 把字节转成 latin1 字符串用于关键词搜索（分块避免栈溢出） */
+function bytesToLatin1(u8) {
+  let out = "", CH = 65536;
+  for (let i = 0; i < u8.length; i += CH) {
+    out += String.fromCharCode.apply(null, u8.subarray(i, Math.min(i + CH, u8.length)));
+  }
+  return out;
+}
+
+/* 把 JS 字符串（如「美图」）转成其 UTF-8 字节对应的 latin1 串，
+   这样才能在 bytesToLatin1 的结果里匹配到中文关键词 */
+function utf8ToLatin1(s) {
+  const bytes = new TextEncoder().encode(s);
+  let out = "";
+  for (let i = 0; i < bytes.length; i++) out += String.fromCharCode(bytes[i]);
+  return out;
+}
+
+function scanKeywords(u8) {
+  const latin = bytesToLatin1(u8);
+  const low = latin.toLowerCase();
+  const hits = [];
+  for (const kw of EDITOR_KEYWORDS_STRONG) if (low.includes(kw)) hits.push(kw);
+  /* 中文关键词必须先转成 UTF-8 字节形式的 latin1 串才能匹配 */
+  for (const kw of EDITOR_KEYWORDS_CN) if (latin.includes(utf8ToLatin1(kw))) hits.push(kw);
+  const weak = EDITOR_KEYWORDS_WEAK.filter(kw => low.includes(kw) && !hits.length);
+  return { strong: hits, weak };
+}
+
+function handleFile(file) {
+  if (!file) return;
+  resetState();
+  S.file = file;
+  S.fileSize = file.size;
+  clearError();
+  analyze().catch(err => {
+    console.error(err);
+    showError(err && err.message ? err.message : "分析失败，请重试。");
+  });
+}
+
+/* ---------------- M2 EXIF 解析器 ---------------- */
+function parseExifAndDQT(u8) {
+  const exif = { present: false, make: null, model: null, software: null, dateTime: null,
+                 dateTimeOriginal: null, orientation: 1, gps: null };
+  const dqt = { tables: [], verdict: null, nearestQ: null, minDist: null };
+  if (sniffFormat(u8) !== "jpeg") return { exif, dqt };
+  const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+
+  function u16(o, le) { return dv.getUint16(o, le); }
+  function u32(o, le) { return dv.getUint32(o, le); }
+
+  /* --- 扫 JPEG 段 --- */
+  let p = 2;
+  let app1Data = null;
+  while (p + 4 <= u8.length) {
+    if (u8[p] !== 0xFF) break;
+    const marker = u8[p + 1];
+    if (marker === 0xD8 || (marker >= 0xD0 && marker <= 0xD7) || marker === 0x01) { p += 2; continue; }
+    if (marker === 0xDA || marker === 0xD9) break;  /* SOS / EOI，段区结束 */
+    const segLen = u16(p + 2, false);
+    if (segLen < 2 || p + 2 + segLen > u8.length) break;
+    const segStart = p + 4, segEnd = p + 2 + segLen;
+    if (marker === 0xE1 && !app1Data) {
+      /* 检查 Exif\0\0 头 */
+      if (segEnd - segStart >= 6 &&
+          u8[segStart] === 0x45 && u8[segStart+1] === 0x78 && u8[segStart+2] === 0x69 &&
+          u8[segStart+3] === 0x66 && u8[segStart+4] === 0x00 && u8[segStart+5] === 0x00) {
+        app1Data = { start: segStart + 6, end: segEnd };
+      }
+    } else if (marker === 0xDB) {
+      /* 量化表 */
+      let q = segStart;
+      while (q + 1 < segEnd) {
+        const pqtq = u8[q]; q += 1;
+        const pq = (pqtq >> 4) & 0x0F, tq = pqtq & 0x0F;
+        const n = pq === 0 ? 64 : 128;
+        if (q + n > segEnd) break;
+        const vals = new Array(64);
+        for (let i = 0; i < 64; i++) vals[i] = pq === 0 ? u8[q + i] : u16(q + i * 2, false);
+        dqt.tables.push({ id: tq, precision: pq, values: vals });
+        q += n;
+      }
+    }
+    p += 2 + segLen;
+  }
+
+  /* --- 解析 TIFF/EXIF --- */
+  if (app1Data) {
+    try {
+      const t = app1Data.start;
+      if (t + 8 <= u8.length) {
+        const bo = u8[t] === 0x49 && u8[t+1] === 0x49 ? "II" : (u8[t] === 0x4D && u8[t+1] === 0x4D ? "MM" : null);
+        if (bo) {
+          const le = bo === "II";
+          if (u16(t + 2, le) === 42) {
+            exif.present = true;
+            const ifd0Off = u32(t + 4, le);
+            const TYPE_SIZE = [0,1,1,2,4,8,1,1,2,4,8];
+
+            function readValue(entryOff, le) {
+              const type = u16(entryOff + 2, le);
+              const count = u32(entryOff + 4, le);
+              const size = (TYPE_SIZE[type] || 1) * count;
+              let dataOff;
+              if (size <= 4) dataOff = entryOff + 8;
+              else {
+                const off = u32(entryOff + 8, le);
+                dataOff = t + off;
+                if (off < 0 || dataOff + size > u8.length) return null;
+              }
+              if (type === 2) { /* ASCII */
+                let s = "";
+                for (let i = 0; i < count; i++) {
+                  const c = u8[dataOff + i];
+                  if (c === 0) break;
+                  s += String.fromCharCode(c);
+                }
+                return s.trim();
+              }
+              if (type === 3) { /* SHORT */
+                const arr = [];
+                for (let i = 0; i < count && i < 16; i++) arr.push(u16(dataOff + i*2, le));
+                return arr.length === 1 ? arr[0] : arr;
+              }
+              if (type === 4) { /* LONG */
+                const arr = [];
+                for (let i = 0; i < count && i < 16; i++) arr.push(u32(dataOff + i*4, le));
+                return arr.length === 1 ? arr[0] : arr;
+              }
+              if (type === 5 || type === 10) { /* RATIONAL / SRATIONAL */
+                const arr = [];
+                for (let i = 0; i < count && i < 8; i++) {
+                  const num = dv.getInt32(dataOff + i*8, le);
+                  const den = dv.getInt32(dataOff + i*8 + 4, le);
+                  arr.push(den === 0 ? 0 : num / den);
+                }
+                return arr.length === 1 ? arr[0] : arr;
+              }
+              if (type === 1 || type === 7) { /* BYTE / UNDEFINED */
+                return u8[dataOff];
+              }
+              return null;
+            }
+
+            function eachIFD(ifdOff, cb) {
+              if (ifdOff <= 0 || t + ifdOff + 2 > u8.length) return;
+              const n = u16(t + ifdOff, le);
+              for (let i = 0; i < n; i++) {
+                const entryOff = t + ifdOff + 2 + i * 12;
+                if (entryOff + 12 > u8.length) return;
+                const tag = u16(entryOff, le);
+                cb(tag, entryOff);
+              }
+            }
+
+            let exifIFDOff = 0, gpsIFDOff = 0;
+            eachIFD(ifd0Off, (tag, eo) => {
+              if (tag === 0x010F) exif.make = readValue(eo, le);
+              else if (tag === 0x0110) exif.model = readValue(eo, le);
+              else if (tag === 0x0112) { const v = readValue(eo, le); if (typeof v === "number") exif.orientation = v; }
+              else if (tag === 0x0131) exif.software = readValue(eo, le);
+              else if (tag === 0x0132) exif.dateTime = readValue(eo, le);
+              else if (tag === 0x8769) { const v = readValue(eo, le); if (typeof v === "number") exifIFDOff = v; }
+              else if (tag === 0x8825) { const v = readValue(eo, le); if (typeof v === "number") gpsIFDOff = v; }
+            });
+            if (exifIFDOff) {
+              eachIFD(exifIFDOff, (tag, eo) => {
+                if (tag === 0x9003) exif.dateTimeOriginal = readValue(eo, le);
+                else if (tag === 0x9004 && !exif.dateTimeOriginal) exif.dateTimeOriginal = readValue(eo, le);
+              });
+            }
+            if (gpsIFDOff) {
+              let latRef = null, lonRef = null, lat = null, lon = null;
+              eachIFD(gpsIFDOff, (tag, eo) => {
+                if (tag === 0x0001) latRef = readValue(eo, le);
+                else if (tag === 0x0003) lonRef = readValue(eo, le);
+                else if (tag === 0x0002) lat = readValue(eo, le);
+                else if (tag === 0x0004) lon = readValue(eo, le);
+              });
+              const dms = v => Array.isArray(v) && v.length === 3
+                ? (Math.abs(v[0]) + v[1]/60 + v[2]/3600) : null;
+              const latD = dms(lat), lonD = dms(lon);
+              if (latD !== null && lonD !== null) {
+                exif.gps = {
+                  lat: (latRef === "S" ? -latD : latD),
+                  lon: (lonRef === "W" ? -lonD : lonD)
+                };
+              }
+            }
+          }
+        }
+      }
+    } catch (e) { /* 畸形 EXIF：保留已有部分结果 */ }
+  }
+
+  /* --- DQT 与标准表比对 --- */
+  if (dqt.tables.length) {
+    function stdTable(base, q) {
+      const s = q < 50 ? Math.floor(5000 / q) : Math.floor(200 - 2 * q);
+      return base.map(v => clamp(Math.floor((v * s + 50) / 100), 1, 255));
+    }
+    /* 拿 id=0（亮度）表比对，质量按 1 步进逐个试，避免软件非整 5 的质量被误判 */
+    const lumaTab = dqt.tables.find(t => t.id === 0) || dqt.tables[0];
+    let best = { dist: Infinity, q: null };
+    for (let q = 50; q <= 95; q++) {
+      const std = stdTable(STD_LUMA, q);
+      let sum = 0;
+      for (let i = 0; i < 64; i++) sum += Math.abs(lumaTab.values[i] - std[i]);
+      const dist = sum / 64;
+      if (dist < best.dist) best = { dist, q };
+    }
+    dqt.minDist = Math.round(best.dist * 10) / 10;
+    dqt.nearestQ = best.q;
+    dqt.verdict = best.dist > 3 ? "custom" : "standard";
+  }
+
+  return { exif, dqt };
+}
+
+/* ---------------- M3 预处理 ---------------- */
+function loadImage(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => { resolve(img); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error(COPY.decodeError)); };
+    img.src = url;
+  });
+}
+
+function drawToCanvas(img) {
+  let w = img.naturalWidth, h = img.naturalHeight;
+  if (!w || !h) throw new Error(COPY.decodeError);
+  let scaled = false;
+  const maxEdge = Math.max(w, h), area = w * h;
+  if (maxEdge > MAX_EDGE || area > MAX_AREA) {
+    const r = Math.min(MAX_EDGE / maxEdge, Math.sqrt(MAX_AREA / area));
+    w = Math.max(1, Math.round(w * r));
+    h = Math.max(1, Math.round(h * r));
+    scaled = true;
+  }
+  const c = document.createElement("canvas");
+  c.width = w; c.height = h;
+  const ctx = c.getContext("2d", { willReadFrequently: true });
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(img, 0, 0, w, h);
+  /* 静默白图探针（iOS 超 canvas 限制时 getImageData 全透明） */
+  const probe = ctx.getImageData(w >> 1, h >> 1, 1, 1).data;
+  if (probe[3] === 0) throw new Error(COPY.tooLargeError);
+  S.scaled = scaled;
+  return c;
+}
+
+function grayscale(ctx, w, h) {
+  const data = ctx.getImageData(0, 0, w, h).data;
+  const L = new Float32Array(w * h);
+  for (let i = 0, j = 0; i < L.length; i++, j += 4) {
+    L[i] = 0.299 * data[j] + 0.587 * data[j+1] + 0.114 * data[j+2];
+  }
+  return { L, imageData: ctx.getImageData(0, 0, w, h) };
+}
+
+/* ---------------- 盒式模糊（可分离，三次近似高斯；Safari 无 ctx.filter） ------- */
+function boxBlurPass(src, dst, w, h, r, horizontal) {
+  const win = 2 * r + 1;
+  if (horizontal) {
+    for (let y = 0; y < h; y++) {
+      const row = y * w;
+      let sum = 0;
+      for (let k = -r; k <= r; k++) sum += src[row + clamp(k, 0, w - 1)];
+      for (let x = 0; x < w; x++) {
+        dst[row + x] = sum / win;
+        const add = src[row + clamp(x + r + 1, 0, w - 1)];
+        const sub = src[row + clamp(x - r, 0, w - 1)];
+        sum += add - sub;
+      }
+    }
+  } else {
+    for (let x = 0; x < w; x++) {
+      let sum = 0;
+      for (let k = -r; k <= r; k++) sum += src[clamp(k, 0, h - 1) * w + x];
+      for (let y = 0; y < h; y++) {
+        dst[y * w + x] = sum / win;
+        const add = src[clamp(y + r + 1, 0, h - 1) * w + x];
+        const sub = src[clamp(y - r, 0, h - 1) * w + x];
+        sum += add - sub;
+      }
+    }
+  }
+}
+
+function gaussianApprox(src, w, h, r, passes) {
+  let a = src, b = new Float32Array(src.length);
+  const tmp = new Float32Array(src.length);
+  for (let p = 0; p < passes; p++) {
+    boxBlurPass(a, tmp, w, h, r, true);
+    boxBlurPass(tmp, b, w, h, r, false);
+    if (p < passes - 1) { const t = a; a = b; b = t; }
+  }
+  return b;  /* 新数组，src 不被覆盖（passes=1 时） */
+}
+
+/* ---------------- M4 ELA ---------------- */
+function canvasToJpegBlob(canvas, quality) {
+  return new Promise((resolve, reject) => {
+    try {
+      if (canvas.toBlob) {
+        canvas.toBlob(b => b ? resolve(b) : reject(new Error(COPY.recompressError)), "image/jpeg", quality);
+      } else {
+        const url = canvas.toDataURL("image/jpeg", quality);
+        const bin = atob(url.split(",")[1]);
+        const u8 = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+        resolve(new Blob([u8], { type: "image/jpeg" }));
+      }
+    } catch (e) { reject(new Error(COPY.recompressError)); }
+  });
+}
+
+function renderELA(gain) {
+  const { srcData, jpegData } = S;
+  if (!srcData || !jpegData) return;
+  const w = S.width, h = S.height;
+  const a = srcData.data, b = jpegData.data;
+  const out = new ImageData(w, h);
+  const o = out.data;
+  for (let i = 0, j = 0; i < w * h; i++, j += 4) {
+    o[j]   = clamp(128 + (a[j]   - b[j])   * gain, 0, 255);
+    o[j+1] = clamp(128 + (a[j+1] - b[j+1]) * gain, 0, 255);
+    o[j+2] = clamp(128 + (a[j+2] - b[j+2]) * gain, 0, 255);
+    o[j+3] = 255;
+  }
+  const ctx = $("viewCanvas").getContext("2d");
+  ctx.putImageData(out, 0, 0);
+}
+
+/* ---------------- M5 块统计 + 热力图 ---------------- */
+function computeHeatGrid() {
+  const { srcData, jpegData } = S;
+  const w = S.width, h = S.height;
+  const gw = Math.ceil(w / BLOCK), gh = Math.ceil(h / BLOCK);
+  const acc = new Float32Array(gw * gh);
+  const a = srcData.data, b = jpegData.data;
+  for (let y = 0; y < h; y++) {
+    const gy = (y / BLOCK) | 0;
+    for (let x = 0; x < w; x++) {
+      const j = (y * w + x) * 4;
+      const dR = a[j] - b[j], dG = a[j+1] - b[j+1], dB = a[j+2] - b[j+2];
+      const dL = 0.299 * dR + 0.587 * dG + 0.114 * dB;
+      acc[gy * gw + ((x / BLOCK) | 0)] += dL * dL;
+    }
+  }
+  const grid = new Float32Array(gw * gh);
+  for (let i = 0; i < grid.length; i++) grid[i] = Math.sqrt(acc[i] / (BLOCK * BLOCK));
+  S.gridW = gw; S.gridH = gh;
+  return grid;
+}
+
+function computeNoiseGrid() {
+  const { hp } = S;
+  const gw = S.gridW, gh = S.gridH, w = S.width, h = S.height;
+  const acc = new Float32Array(gw * gh);
+  for (let y = 0; y < h; y++) {
+    const gy = (y / BLOCK) | 0;
+    for (let x = 0; x < w; x++) {
+      const v = hp[y * w + x];
+      acc[gy * gw + ((x / BLOCK) | 0)] += v * v;
+    }
+  }
+  const grid = new Float32Array(gw * gh);
+  for (let i = 0; i < grid.length; i++) grid[i] = Math.sqrt(acc[i] / (BLOCK * BLOCK));
+  return grid;
+}
+
+function smoothGrid(grid, gw, gh) {
+  const out = new Float32Array(grid.length);
+  for (let y = 0; y < gh; y++) {
+    for (let x = 0; x < gw; x++) {
+      let sum = 0, n = 0;
+      for (let dy = -1; dy <= 1; dy++) {
+        const yy = y + dy; if (yy < 0 || yy >= gh) continue;
+        for (let dx = -1; dx <= 1; dx++) {
+          const xx = x + dx; if (xx < 0 || xx >= gw) continue;
+          sum += grid[yy * gw + xx]; n++;
+        }
+      }
+      out[y * gw + x] = sum / n;
+    }
+  }
+  return out;
+}
+
+function p95Normalize(grid) {
+  const sorted = Float32Array.from(grid).sort();
+  const p95 = sorted[Math.floor(0.95 * (sorted.length - 1))] || 0;
+  const out = new Float32Array(grid.length);
+  if (p95 < 1e-9) return out;
+  for (let i = 0; i < grid.length; i++) out[i] = Math.min(1, grid[i] / p95);
+  return out;
+}
+
+/* 4 段色带：深蓝 → 青 → 黄 → 红 */
+function colorRamp(t) {
+  const stops = [[0,30,60,180],[0.4,0,200,200],[0.7,255,210,0],[1,255,40,40]];
+  for (let i = 0; i < stops.length - 1; i++) {
+    const [t0,r0,g0,b0] = stops[i], [t1,r1,g1,b1] = stops[i+1];
+    if (t <= t1) {
+      const f = (t - t0) / (t1 - t0);
+      return [r0 + (r1-r0)*f, g0 + (g1-g0)*f, b0 + (b1-b0)*f];
+    }
+  }
+  return [255,40,40];
+}
+
+function renderHeat(mode) {
+  const gridRaw = mode === "compress" ? S.heatGrid : S.noiseGrid;
+  if (!gridRaw) return;
+  const gw = S.gridW, gh = S.gridH;
+  const grid = p95Normalize(smoothGrid(gridRaw, gw, gh));
+  /* 小画布：块分辨率上色，再放大绘制（自带平滑） */
+  const small = document.createElement("canvas");
+  small.width = gw; small.height = gh;
+  const sctx = small.getContext("2d");
+  const simg = sctx.createImageData(gw, gh);
+  for (let i = 0; i < gw * gh; i++) {
+    const [r, g, b] = colorRamp(grid[i]);
+    simg.data[i*4] = r; simg.data[i*4+1] = g; simg.data[i*4+2] = b; simg.data[i*4+3] = 255;
+  }
+  sctx.putImageData(simg, 0, 0);
+  /* 底图：灰度 + 压暗 */
+  const { grayL } = S;
+  const base = new ImageData(S.width, S.height);
+  for (let i = 0; i < S.width * S.height; i++) {
+    const v = grayL[i] * 0.6;
+    base.data[i*4] = v; base.data[i*4+1] = v; base.data[i*4+2] = v; base.data[i*4+3] = 255;
+  }
+  const ctx = $("viewCanvas").getContext("2d");
+  const tmp = document.createElement("canvas");
+  tmp.width = S.width; tmp.height = S.height;
+  tmp.getContext("2d").putImageData(base, 0, 0);
+  ctx.drawImage(tmp, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+  ctx.globalAlpha = 0.55;
+  ctx.drawImage(small, 0, 0, S.width, S.height);
+  ctx.globalAlpha = 1;
+}
+
+/* ---------------- M6 噪声一致性 ---------------- */
+function computeNoise() {
+  const { grayL } = S;
+  const w = S.width, h = S.height;
+  const blur = gaussianApprox(grayL, w, h, 2, 3);
+  const hp = new Float32Array(w * h);
+  for (let i = 0; i < hp.length; i++) hp[i] = grayL[i] - blur[i];
+  S.hp = hp;
+  renderNoiseView();
+}
+
+function renderNoiseView() {
+  const { hp } = S;
+  const w = S.width, h = S.height;
+  const out = new ImageData(w, h);
+  for (let i = 0; i < w * h; i++) {
+    const v = clamp(128 + hp[i] * 20, 0, 255);
+    out.data[i*4] = v; out.data[i*4+1] = v; out.data[i*4+2] = v; out.data[i*4+3] = 255;
+  }
+  $("viewCanvas").getContext("2d").putImageData(out, 0, 0);
+}
+
+/* ---------------- M8 来源判定 ---------------- */
+function judgeSource() {
+  const { exif, format } = S;
+  const maxEdge = Math.max(S.width, S.height);
+  const kw = S.keywordHits;
+  if (kw.strong.length && exif.software) return { level: "bad", icon: "🚨",
+    title: "元数据记录到编辑软件：" + exif.software,
+    body: "　照片的软件字段里明确写着编辑软件的名字，说明它在某个环节被这类软件处理过。" };
+  if (kw.strong.length) return { level: "bad", icon: "🚨",
+    title: "文件内检测到编辑软件痕迹（" + kw.strong.join(" / ") + "）",
+    body: "　文件内部残留了编辑软件写入的信息。" };
+  if (format === "jpeg" && exif.present && (exif.make || exif.model)) return { level: "ok", icon: "📱",
+    title: "疑似相机/手机原图",
+    body: "　元数据里有拍摄设备信息（" + [exif.make, exif.model].filter(Boolean).join(" ") + "），检测参考价值较高。" };
+  if (format === "jpeg" && !exif.present && maxEdge < 1200) return { level: "warn", icon: "⚠️",
+    title: "疑似社交软件压缩图",
+    body: "　分辨率低且无元数据，像经过微信/QQ 传输。压缩本身会制造大量「假痕迹」，本页所有结果请只当作非常粗略的参考。" };
+  if (format === "png") return { level: "info", icon: "🖼️",
+    title: "PNG / 截图类图片",
+    body: "　PNG 通常来自截图或软件导出，从未经过相机压缩，ELA 参考价值下降，请重点看热力图和噪声视图。" };
+  if (format === "webp") return { level: "info", icon: "🌐",
+    title: "WebP 网络图",
+    body: "　WebP 多来自网页/聊天工具转码，元数据通常已丢失，请重点看热力图和噪声视图。" };
+  if (format === "heic") return { level: "ok", icon: "📱",
+    title: "iPhone 原始格式（HEIC）",
+    body: "　通常是手机直出原图，检测参考价值较高。" };
+  return { level: "info", icon: "🗂️",
+    title: "疑似转存/下载图",
+    body: "　元数据已丢失，无法判断原始来源，结论请谨慎参考。" };
+}
+
+/* ---------------- M9 线索汇总 ---------------- */
+/* 找出热力图上的集中高差异簇：定位交给用户对照，不自动下篡改结论 */
+function analyzeClusters(grid) {
+  const norm = p95Normalize(grid);
+  const gw = S.gridW, gh = S.gridH;
+  const TH = 0.8, MIN_BLOCKS = 4;
+  const seen = new Uint8Array(norm.length);
+  const clusters = [];
+  for (let i = 0; i < norm.length; i++) {
+    if (seen[i] || norm[i] < TH) continue;
+    let count = 0, sx = 0, sy = 0;
+    let minX = gw, minY = gh, maxX = 0, maxY = 0;
+    const stack = [i]; seen[i] = 1;
+    while (stack.length) {
+      const cur = stack.pop(); count++;
+      const x = cur % gw, y = (cur / gw) | 0;
+      sx += x; sy += y;
+      if (x < minX) minX = x; if (x > maxX) maxX = x;
+      if (y < minY) minY = y; if (y > maxY) maxY = y;
+      const nbrs = [x > 0 ? cur - 1 : -1, x < gw - 1 ? cur + 1 : -1,
+                    y > 0 ? cur - gw : -1, y < gh - 1 ? cur + gw : -1];
+      for (const nb of nbrs) if (nb >= 0 && !seen[nb] && norm[nb] >= TH) { seen[nb] = 1; stack.push(nb); }
+    }
+    if (count >= MIN_BLOCKS) clusters.push({
+      cx: sx / count, cy: sy / count, blocks: count,
+      minX, minY, maxX, maxY
+    });
+  }
+  clusters.sort((a, b) => b.blocks - a.blocks);
+  return clusters;
+}
+
+/* 把聚类簇转成像素级标注框（原图坐标） */
+function buildAnnoBoxes() {
+  if (!S.heatGrid) return [];
+  const cls = analyzeClusters(S.heatGrid).slice(0, 3);
+  return cls.map((c, i) => {
+    const x0 = clamp(c.minX * BLOCK, 0, S.width - 1);
+    const y0 = clamp(c.minY * BLOCK, 0, S.height - 1);
+    const x1 = clamp((c.maxX + 1) * BLOCK, 0, S.width);
+    const y1 = clamp((c.maxY + 1) * BLOCK, 0, S.height);
+    return { x0, y0, x1, y1, label: "①②③"[i] + " x:" + x0 + "-" + x1 + ", y:" + y0 + "-" + y1 };
+  });
+}
+
+function posWord(nx, ny) {
+  const h = nx < 0.37 ? "左" : nx > 0.63 ? "右" : "";
+  const v = ny < 0.37 ? "上" : ny > 0.63 ? "下" : "";
+  return (h + v) || "中部";
+}
+
+function buildClues() {
+  const clues = [];
+  const { exif, dqt, format } = S;
+  const kw = S.keywordHits;
+
+  if (kw.strong.length && exif.software) clues.push({ level: "strong",
+    text: "元数据 Software 字段记录到：" + exif.software + "，且文件内残留编辑软件数据（" + kw.strong.join(" / ") + "）。这是较硬的线索。" });
+  else if (kw.strong.length) clues.push({ level: "strong",
+    text: "检测到编辑软件痕迹（" + kw.strong.join(" / ") + "）——文件内部残留了这类软件写入的数据。这是较硬的线索。" });
+  else if (exif.software) clues.push({ level: "strong",
+    text: "元数据 Software 字段记录到：" + exif.software + "。该字段明确写出了处理这张图的软件。" });
+  else if (kw.weak.length) clues.push({ level: "mid",
+    text: "文件内出现「" + kw.weak.join("/") + "」相关字样——可能只是兼容性标记，不一定是编辑痕迹。" });
+
+  if (format === "jpeg" && dqt.verdict === "custom") clues.push({ level: "mid",
+    text: "量化表与常见相机默认值不一致（最接近标准质量 " + dqt.nearestQ + "，平均偏差 " + dqt.minDist + "）——图片可能被软件重新保存过，但部分手机厂商也用自定义表，仅作提示。" });
+
+  if (format === "jpeg" && dqt.verdict === "standard") clues.push({ level: "clean",
+    text: "量化表是标准样式，未发现重新保存的量化特征。" });
+
+  const cls = S.heatGrid ? analyzeClusters(S.heatGrid) : [];
+  const totalBlocks = S.gridW * S.gridH || 1;
+  const covered = cls.reduce((s, c) => s + c.blocks, 0);
+  const compressed = S.sourceLevel === "warn";   /* 疑似压缩图：聚类线索降级 */
+  if (cls.length && covered < totalBlocks * 0.20) {
+    const desc = cls.slice(0, 3).map(c => {
+      const side = Math.round(Math.sqrt(c.blocks) * BLOCK);
+      return "「" + posWord(c.cx / S.gridW, c.cy / S.gridH) + "」约 " + side + "×" + side + " 像素";
+    }).join("、");
+    clues.push({ level: compressed ? "info" : "mid",
+      text: (compressed
+        ? "差异较集中的区域：" + desc + "。但这张图疑似经过压缩，这些区域大多是压缩噪声，参考价值有限。"
+        : "发现 " + Math.min(cls.length, 3) + " 处集中的高差异区域：" + desc + "。注意：高纹理内容（窗户、树叶、花纹）也会上榜，请切到热力图/ELA 对照这些位置是否与可疑内容重合。") });
+  } else if (cls.length) {
+    clues.push({ level: compressed ? "info" : "clean",
+      text: compressed
+        ? "高差异区域散布较广——这是压缩图的典型表现，多为压缩噪声，参考价值有限。"
+        : "高差异区域占图面比例较大，更像正常的丰富纹理内容（如密集建筑、树叶、花纹），未发现孤立的突兀区域。" });
+  } else {
+    clues.push({ level: "clean", text: "压缩差异分布均匀，未发现集中异常区域。" });
+  }
+
+  if (format === "jpeg" && !exif.present) clues.push({ level: "info",
+    text: "没有 EXIF 元数据——图片被转存或压缩过，原始信息已丢失，无法验证拍摄来源。" });
+  if (S.scaled) clues.push({ level: "info",
+    text: "原图较大，分析时已等比缩放到 " + MAX_EDGE + "px 内，细节精度略有下降。" });
+  if (exif.orientation && exif.orientation !== 1) clues.push({ level: "info",
+    text: "照片带旋转标记（方向 " + exif.orientation + "），若显示方向不对请以设备相册为准。" });
+  if (exif.gps) clues.push({ level: "info",
+    text: "包含 GPS 位置信息（" + exif.gps.lat.toFixed(4) + ", " + exif.gps.lon.toFixed(4) + "）——发图给别人前注意隐私。" });
+
+  return clues;
+}
+
+const LEVEL_LABEL = { strong: ["强线索", "badge-strong"], mid: ["可疑点", "badge-mid"],
+                      info: ["背景", "badge-info"], clean: ["未见异常", "badge-clean"] };
+
+/* ---------------- 量化评分（可疑度 + 可靠度分离） ---------------- */
+function scoreResult() {
+  const { exif, dqt, format } = S;
+  const kw = S.keywordHits;
+  const compressed = S.sourceLevel === "warn";
+  const cls = S.heatGrid ? analyzeClusters(S.heatGrid) : [];
+  const totalBlocks = S.gridW * S.gridH || 1;
+  const covered = cls.reduce((s, c) => s + c.blocks, 0);
+
+  /* --- 可疑度总分：从 100 起扣 --- */
+  let sus = 100; const susItems = [];
+  if (exif.software && kw.strong.length) { sus -= 30; susItems.push([-30, "元数据记录编辑软件", exif.software]); }
+  else if (kw.strong.length) { sus -= 25; susItems.push([-25, "文件内残留编辑软件数据", kw.strong.join(" / ")]); }
+  else if (exif.software) { sus -= 30; susItems.push([-30, "元数据记录编辑软件", exif.software]); }
+  if (format === "jpeg" && dqt.verdict === "custom") {
+    sus -= 15; susItems.push([-15, "量化表非标准（疑似重新保存）", "最接近标准质量 " + dqt.nearestQ + "，部分手机厂商也用自定义表"]);
+  }
+  if (!compressed && cls.length && covered < totalBlocks * 0.20) {
+    const biggest = cls[0].blocks;
+    const d = biggest >= 80 ? 15 : biggest >= 30 ? 10 : 6;
+    const extra = Math.min(cls.length - 1, 2) * 2;
+    sus -= d + extra;
+    const side = Math.round(Math.sqrt(biggest) * BLOCK);
+    susItems.push([-(d + extra), "热力图存在集中高差异区域", cls.length + " 处，最大约 " + side + "×" + side + " 像素（高纹理内容也会上榜）"]);
+  }
+  if (format === "jpeg" && !exif.present) { sus -= 10; susItems.push([-10, "无 EXIF 元数据", "无法验证原始拍摄来源"]); }
+  sus = Math.max(0, sus);
+
+  /* --- 可靠度评分：衡量这次检测本身可信吗 --- */
+  let rel = 100; const relItems = [];
+  if (compressed) { rel -= 40; relItems.push([-40, "疑似社交软件压缩图", "压缩噪声会制造大量假痕迹"]); }
+  if (format === "png" || format === "webp") { rel -= 15; relItems.push([-15, "非 JPEG 格式", "ELA 参考价值下降"]); }
+  else if (format === "jpeg" && !exif.present) { rel -= 15; relItems.push([-15, "无 EXIF 元数据", "无法验证原始来源"]); }
+  if (S.scaled) { rel -= 10; relItems.push([-10, "大图缩放后分析", "细节检测精度下降"]); }
+  rel = Math.max(5, rel);
+
+  return { sus, susItems, rel, relItems };
+}
+
+function renderScores(sc) {
+  $("susScore").textContent = sc.sus;
+  $("relScore").textContent = sc.rel;
+  const susWord = sc.sus >= 85 ? "低 · 基本干净" : sc.sus >= 60 ? "中 · 值得注意" : "高 · 明显可疑";
+  const relWord = sc.rel >= 75 ? "高 · 结果可信" : sc.rel >= 60 ? "中 · 谨慎参考" : "低 · 建议用原图重测";
+  $("susGrade").textContent = susWord;
+  $("relGrade").textContent = relWord;
+  $("scoreCardSus").className = "score-card " + (sc.sus >= 85 ? "g-green" : sc.sus >= 60 ? "g-yellow" : "g-red");
+  $("scoreCardRel").className = "score-card " + (sc.rel >= 75 ? "g-green" : sc.rel >= 60 ? "g-yellow" : "g-red");
+  function list(items) {
+    if (!items.length) return '<div class="sd-none">未检出扣分项</div>';
+    return items.map(([d, label, detail]) =>
+      '<div class="sd-item"><span class="sd-delta">' + d + '</span><span><b>' + label + '</b> — ' + detail + '</span></div>'
+    ).join("");
+  }
+  $("scoreDetail").innerHTML =
+    '<div class="sd-title">可疑度扣分明细</div>' + list(sc.susItems) +
+    '<div class="sd-title">可靠度扣分明细</div>' + list(sc.relItems);
+}
+
+/* ---------------- 问题标注蒙版 ---------------- */
+function overlayAnno() {
+  if (!S.annoOn || !S.annoBoxes || !S.annoBoxes.length) return;
+  const ctx = $("viewCanvas").getContext("2d");
+  const w = S.width, h = S.height;
+  const lw = Math.max(3, Math.round(w / 400));
+  const fs = Math.max(18, Math.round(w / 55));
+  for (const b of S.annoBoxes) {
+    ctx.save();
+    ctx.fillStyle = "rgba(194, 65, 12, 0.13)";
+    ctx.fillRect(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0);
+    ctx.strokeStyle = "#c2410c";
+    ctx.lineWidth = lw;
+    ctx.strokeRect(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0);
+    const text = b.label;
+    ctx.font = "bold " + fs + "px -apple-system, 'PingFang SC', sans-serif";
+    const tw = ctx.measureText(text).width + fs * 0.8;
+    const th = fs * 1.5;
+    let tx = b.x0, ty = b.y0 - th;
+    if (ty < 0) ty = b.y0 + 2;
+    if (tx + tw > w) tx = Math.max(0, w - tw);
+    ctx.fillStyle = "rgba(23, 37, 59, 0.82)";
+    ctx.fillRect(tx, ty, tw, th);
+    ctx.fillStyle = "#ffe3d1";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, tx + fs * 0.4, ty + th / 2);
+    ctx.restore();
+  }
+}
+
+function renderClues() {
+  const ul = $("clueList");
+  ul.innerHTML = "";
+  for (const c of S.clues) {
+    const li = document.createElement("li");
+    const [label, cls] = LEVEL_LABEL[c.level];
+    li.innerHTML = '<span class="cl-badge ' + cls + '">' + label + '</span><span>' + c.text + '</span>';
+    ul.appendChild(li);
+  }
+  $("verdictCard").classList.add("show");
+  $("actionRow").style.display = "flex";
+}
+
+/* ---------------- 元数据 tab ---------------- */
+function renderMeta() {
+  const { exif, dqt, format } = S;
+  const panel = $("metaPanel");
+  const rows = [];
+  const esc = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  rows.push(["文件格式", { jpeg: "JPEG", png: "PNG", webp: "WebP", heic: "HEIC (iPhone)", gif: "GIF" }[format] || format]);
+  rows.push(["文件大小", (S.fileSize / 1024).toFixed(1) + " KB"]);
+  rows.push(["分析分辨率", S.width + " × " + S.height + (S.scaled ? "（已缩放）" : "")]);
+  if (format === "jpeg") {
+    if (exif.present) {
+      if (exif.make) rows.push(["设备厂商", exif.make]);
+      if (exif.model) rows.push(["设备型号", exif.model]);
+      if (exif.software) rows.push(["<b class='meta-flag'>软件字段 ⚠</b>", "<b class='meta-flag'>" + esc(exif.software) + "</b>"]);
+      if (exif.dateTime) rows.push(["修改时间", esc(exif.dateTime)]);
+      if (exif.dateTimeOriginal) rows.push(["拍摄时间", esc(exif.dateTimeOriginal)]);
+      if (exif.gps) rows.push(["GPS 位置", exif.gps.lat.toFixed(5) + ", " + exif.gps.lon.toFixed(5)]);
+      rows.push(["旋转标记", "方向 " + exif.orientation]);
+    } else {
+      rows.push(["EXIF 元数据", "<span class='meta-flag'>无 ⚠</span>（被转存/压缩过）"]);
+    }
+    if (dqt.verdict) {
+      rows.push(["量化表", dqt.verdict === "standard"
+        ? "标准样式（约相当于质量 " + dqt.nearestQ + "）"
+        : "<span class='meta-flag'>非标准 ⚠</span>（最接近质量 " + dqt.nearestQ + "，可能被重新保存）"]);
+    }
+  } else {
+    rows.push(["EXIF 元数据", "该格式一般不携带（或已丢失）"]);
+  }
+  if (S.keywordHits.strong.length) {
+    rows.push(["<b class='meta-flag'>编辑软件痕迹 ⚠</b>", "<b class='meta-flag'>" + S.keywordHits.strong.join(" / ") + "</b>"]);
+  }
+  let html = '<table class="meta-table">';
+  for (const [k, v] of rows) html += "<tr><td>" + k + "</td><td>" + v + "</td></tr>";
+  html += "</table>";
+  panel.innerHTML = html;
+}
+
+/* ---------------- M10 UI 控制器 ---------------- */
+const HOWTO_ORDER = ["original", "ela", "heat", "noise", "meta"];
+
+function switchView(view) {
+  S.view = view;
+  document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.view === view));
+  const canvas = $("viewCanvas");
+  const metaPanel = $("metaPanel");
+  $("elaParam").classList.toggle("show", view === "ela");
+  $("heatParam").classList.toggle("show", view === "heat");
+  const showAnno = (view === "original" || view === "heat") && S.annoBoxes && S.annoBoxes.length;
+  $("annoRow").classList.toggle("show", showAnno);
+  $("howtoBody").innerHTML = COPY.howto[view] || "";
+  if (view === "meta") {
+    canvas.classList.add("hide");
+    metaPanel.classList.add("show");
+    renderMeta();
+  } else {
+    metaPanel.classList.remove("show");
+    canvas.classList.remove("hide");
+    if (view === "original") { drawOriginal(); overlayAnno(); }
+    else if (view === "ela") renderELA(+$("elaGain").value);
+    else if (view === "heat") { renderHeat(S.heatMode); overlayAnno(); }
+    else if (view === "noise") renderNoiseView();
+  }
+}
+
+function drawOriginal() {
+  const ctx = $("viewCanvas").getContext("2d");
+  ctx.putImageData(S.srcData, 0, 0);
+}
+
+function resetState() {
+  if (S.blobUrl) { URL.revokeObjectURL(S.blobUrl); S.blobUrl = null; }
+  Object.assign(S, {
+    file: null, format: "", fileSize: 0, exif: null, dqt: null, keywordHits: [],
+    width: 0, height: 0, scaled: false, srcData: null, jpegData: null,
+    grayL: null, hp: null, heatGrid: null, noiseGrid: null, gridW: 0, gridH: 0,
+    clues: [], view: "original", heatMode: "compress",
+    annoBoxes: [], sourceLevel: "info"
+  });
+  ["viewer"].forEach(id => $(id).classList.remove("show"));
+  $("sourceCard").classList.remove("show");
+  $("verdictCard").classList.remove("show");
+  $("disclaimerBox").classList.remove("show");
+  $("actionRow").style.display = "none";
+}
+
+/* ---------------- 主流程 ---------------- */
+async function analyze() {
+  const file = S.file;
+  if (!file) return;
+  $("dropzone").style.display = "none";
+  try {
+    /* 1. 读字节 */
+    setStatus("读取文件…"); await tick();
+    const buf = await file.arrayBuffer();
+    const u8 = new Uint8Array(buf);
+    const fmt = sniffFormat(u8);
+    S.format = fmt;
+    if (fmt === "heic") {
+      const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+      if (!isSafari) throw new Error(COPY.heicError);
+    }
+    if (fmt === "unknown") throw new Error(COPY.decodeError);
+
+    /* 2. 元数据（轻量，先做） */
+    setStatus("解析元数据…"); await tick();
+    const { exif, dqt } = parseExifAndDQT(u8);
+    S.exif = exif; S.dqt = dqt;
+    S.keywordHits = scanKeywords(u8);
+
+    /* 3. 解码 + 画布 */
+    setStatus("解码图片…"); await tick();
+    const img = await loadImage(file);
+    const srcCanvas = drawToCanvas(img);
+    S.width = srcCanvas.width; S.height = srcCanvas.height;
+    /* 关键：设置展示画布的分辨率，否则 putImageData 只会显示左上角 */
+    $("viewCanvas").width = S.width;
+    $("viewCanvas").height = S.height;
+    const sctx = srcCanvas.getContext("2d", { willReadFrequently: true });
+    const g = grayscale(sctx, S.width, S.height);
+    S.grayL = g.L;
+    S.srcData = g.imageData;
+    img.src && URL.revokeObjectURL(img.src);
+
+    /* 4. ELA 重压缩 */
+    setStatus("重新压缩对比（ELA 核心）…"); await tick();
+    const blob = await canvasToJpegBlob(srcCanvas, ELA_QUALITY);
+    const url = URL.createObjectURL(blob);
+    S.blobUrl = url;
+    const recompressed = await new Promise((resolve, reject) => {
+      const im = new Image();
+      im.onload = () => resolve(im);
+      im.onerror = () => reject(new Error(COPY.recompressError));
+      im.src = url;
+    });
+    const rc = document.createElement("canvas");
+    rc.width = S.width; rc.height = S.height;
+    const rctx = rc.getContext("2d", { willReadFrequently: true });
+    rctx.drawImage(recompressed, 0, 0);
+    S.jpegData = rctx.getImageData(0, 0, S.width, S.height);
+
+    /* 5. 噪声 */
+    setStatus("提取噪声纹理…"); await tick();
+    computeNoise();
+
+    /* 6. 网格统计 */
+    setStatus("生成热力图…"); await tick();
+    S.heatGrid = computeHeatGrid();
+    S.noiseGrid = computeNoiseGrid();
+
+    /* 7. 汇总 */
+    setStatus("汇总线索…"); await tick();
+    const src = judgeSource();
+    S.sourceLevel = src.level;
+    $("scIcon").textContent = src.icon;
+    $("scTitle").textContent = src.title;
+    $("scBody").textContent = src.body;
+    $("sourceCard").className = "source-card show level-" + src.level;
+    S.annoBoxes = buildAnnoBoxes();
+    renderScores(scoreResult());
+    S.clues = buildClues();
+    renderClues();
+
+    /* 8. 展示 */
+    $("disclaimerBox").classList.add("show");
+    $("viewer").classList.add("show");
+    $("elaGain").value = 16; $("elaGainVal").textContent = "16";
+    document.querySelectorAll("#heatSeg button").forEach(b =>
+      b.classList.toggle("active", b.dataset.mode === "compress"));
+    S.heatMode = "compress";
+    switchView("original");
+    $("howto").open = false;
+    hideStatus();
+    /* 自动滚到视图区（移动端友好） */
+    $("viewer").scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (err) {
+    $("dropzone").style.display = "";
+    throw err;
+  }
+}
+
+/* ---------------- 事件绑定 ---------------- */
+$("dropzone").addEventListener("click", () => $("fileInput").click());
+$("fileInput").addEventListener("change", e => {
+  if (e.target.files && e.target.files[0]) handleFile(e.target.files[0]);
+  e.target.value = "";
+});
+const dz = $("dropzone");
+["dragenter", "dragover"].forEach(ev => dz.addEventListener(ev, e => {
+  e.preventDefault(); e.stopPropagation(); dz.classList.add("dragover");
+}));
+["dragleave", "drop"].forEach(ev => dz.addEventListener(ev, e => {
+  e.preventDefault(); e.stopPropagation(); dz.classList.remove("dragover");
+}));
+dz.addEventListener("drop", e => {
+  const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if (f) handleFile(f);
+});
+document.addEventListener("paste", e => {
+  const items = e.clipboardData && e.clipboardData.items;
+  if (!items) return;
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    if (item.type && item.type.startsWith("image/")) {
+      const f = item.getAsFile();
+      if (f) { handleFile(f); break; }
+    }
+  }
+});
+
+$("tabs").addEventListener("click", e => {
+  const t = e.target.closest(".tab");
+  if (t) switchView(t.dataset.view);
+});
+$("elaGain").addEventListener("input", e => {
+  $("elaGainVal").textContent = e.target.value;
+  if (S.view === "ela") {
+    cancelAnimationFrame(switchView._raf);
+    switchView._raf = requestAnimationFrame(() => renderELA(+e.target.value));
+  }
+});
+$("heatSeg").addEventListener("click", e => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  S.heatMode = b.dataset.mode;
+  document.querySelectorAll("#heatSeg button").forEach(x => x.classList.toggle("active", x === b));
+  if (S.view === "heat") { renderHeat(S.heatMode); overlayAnno(); }
+});
+$("annoToggle").addEventListener("change", e => {
+  S.annoOn = e.target.checked;
+  if (S.view === "original") { drawOriginal(); overlayAnno(); }
+  else if (S.view === "heat") { renderHeat(S.heatMode); overlayAnno(); }
+});
+$("ackBtn").addEventListener("click", () => $("disclaimerBox").classList.remove("show"));
+$("resetBtn").addEventListener("click", () => {
+  resetState();
+  $("dropzone").style.display = "";
+  $("fileInput").click();
+});
+$("reanalyzeBtn").addEventListener("click", () => {
+  if (S.file) handleFile(S.file);
+});
+
+/* 微信内置浏览器提示 */
+if (/MicroMessenger/i.test(navigator.userAgent)) $("browserTip").classList.add("show");
+</script>
+</body>
+</html>
